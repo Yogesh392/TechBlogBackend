@@ -31,10 +31,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/public/**", "/public-test").permitAll()
-                        .anyRequest().authenticated())
+                        .anyRequest().permitAll())   // 🔓 Allow everything for testing
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
+        // Keep the JWT filter in the chain (but it won't block requests because it only acts when a token is present)
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
