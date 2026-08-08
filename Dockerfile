@@ -5,7 +5,7 @@ RUN mvn dependency:go-offline -B
 COPY backend/src ./src
 RUN mvn clean package -DskipTests
 
-FROM openjdk:23-jdk-slim
+FROM eclipse-temurin:23-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
