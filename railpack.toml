@@ -1,0 +1,8 @@
+[build]
+workingDirectory = "backend"
+
+[build.steps.build]
+commands = ["./mvnw clean package -DskipTests"]
+
+[deploy]
+startCommand = "java -jar target/*.jar"
