@@ -3,7 +3,7 @@ WORKDIR /app
 COPY backend/pom.xml .
 RUN mvn dependency:go-offline -B
 COPY backend/src ./src
-RUN mvn clean package -DskipTests
+RUN mvn clean package -DskipTests -Dlombok.addLombokGeneratedAnnotation=true
 
 FROM eclipse-temurin:23-jre-alpine
 WORKDIR /app
