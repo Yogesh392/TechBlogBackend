@@ -1,0 +1,44 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/techblog
+    username: postgres
+    password: Admin@123
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+app:
+  jwt:
+    secret: YmVzdC10ZWNoLWJsb2ctc2VjcmV0LWtleS1mb3Itand0LWF1dGhlbnRpY2F0aW9uLXNwcmluZy1ib290LWFwcA==
+    expiration: 86400000
+
+cloudinary:
+  cloud-name: your-cloud-name
+  api-key: your-api-key
+  api-secret: your-api-secret
