@@ -1,3 +1,4 @@
+
 package com.techblog.backend.security;
 
 import jakarta.servlet.FilterChain;
@@ -13,12 +14,23 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+// Deliberately NOT @Component. It's created as a @Bean in SecurityConfig
+// (constructor injection) and added to the chain via addFilterBefore().
+// If you ever add @Component back here, Spring Boot will ALSO
+// auto-register it as a raw servlet filter on "/*", running it twice per
+// request - that's exactly what the old FilterRegistrationBean.setEnabled(false)
+// workaround in SecurityConfig existed to prevent. Without @Component,
+// that workaround isn't needed and has been removed.
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
 
-    // Constructor for manual dependency injection
+    // Kept in sync with SecurityConfig.PUBLIC_PATHS.
+    private static final String[] SKIP_PREFIXES = {
+            "/api/auth/", "/api/public/"
+    };
+
     public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
@@ -30,9 +42,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Skip JWT processing for public auth endpoints
         String path = request.getServletPath();
-        if (path.startsWith("/api/auth/")) {
+
+        for (String prefix : SKIP_PREFIXES) {
+            if (path.startsWith(prefix)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+        if (path.equals("/public-test")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -44,7 +62,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwt = authorizationHeader.substring(7);
-            username = jwtUtil.extractUsername(jwt);
+            try {
+                username = jwtUtil.extractUsername(jwt);
+            } catch (Exception e) {
+                // Malformed/expired token: don't blow up with a 500, just
+                // proceed as anonymous and let authorizeHttpRequests decide.
+                logger.warn("Invalid JWT token on " + path + ": " + e.getMessage());
+            }
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -63,3 +87,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
+ 

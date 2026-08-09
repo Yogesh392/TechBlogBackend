@@ -1,7 +1,9 @@
 package com.techblog.backend.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techblog.backend.security.JwtAuthenticationFilter;
 import com.techblog.backend.security.JwtUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,56 +21,79 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // ===== Main security filter chain =====
+    // Wired from application-prod.properties: app.cors.allowed-origins
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOriginsProperty;
+
+    private static final String[] PUBLIC_PATHS = {
+            "/api/auth/**", "/api/public/**", "/public-test"
+    };
+
+    // JwtAuthenticationFilter has no @Component - this is the ONLY place
+    // it gets instantiated, via constructor injection. That means Spring
+    // Boot never auto-registers it as a second, raw servlet filter, so the
+    // old FilterRegistrationBean.setEnabled(false) workaround is gone.
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http,
-                                           JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
+        return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/public/**", "/public-test").permitAll()
+                        .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception
+                        // Fires when there's no valid authentication at all.
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(401);
+                            response.setContentType("application/json");
+                            response.getWriter().write(mapper.writeValueAsString(
+                                    Map.of("error", "Unauthorized",
+                                            "message", authException.getMessage(),
+                                            "path", request.getRequestURI())
+                            ));
+                        })
+                        // Fires when authenticated but lacking permission.
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            System.err.println("=== CUSTOM ACCESS DENIED HANDLER ===");
-                            accessDeniedException.printStackTrace();
-                            response.sendError(403, "Forbidden");
+                            response.setStatus(403);
+                            response.setContentType("application/json");
+                            response.getWriter().write(mapper.writeValueAsString(
+                                    Map.of("error", "Forbidden",
+                                            "message", accessDeniedException.getMessage(),
+                                            "path", request.getRequestURI())
+                            ));
                         })
                 );
 
-        // Add JWT filter inside the Spring Security chain
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // ===== Create the JwtAuthenticationFilter bean (not a @Component, no global registration) =====
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtUtil jwtUtil,
-                                                           UserDetailsService userDetailsService) {
-        return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
-    }
-
-    // ===== CORS Configuration =====
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:5173",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:3001",
-                "http://127.0.0.1:5173"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        List<String> origins = Arrays.stream(allowedOriginsProperty.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
 
