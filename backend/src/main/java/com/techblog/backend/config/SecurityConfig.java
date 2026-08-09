@@ -1,6 +1,5 @@
 package com.techblog.backend.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techblog.backend.security.JwtAuthenticationFilter;
 import com.techblog.backend.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,24 +21,18 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Wired from application-prod.properties: app.cors.allowed-origins
     @Value("${app.cors.allowed-origins}")
     private String allowedOriginsProperty;
 
     private static final String[] PUBLIC_PATHS = {
-            "/api/auth/**", "/api/public/**", "/public-test"
+            "/api/auth/**", "/api/public/**", "/public-test", "/error"
     };
 
-    // JwtAuthenticationFilter has no @Component - this is the ONLY place
-    // it gets instantiated, via constructor injection. That means Spring
-    // Boot never auto-registers it as a second, raw servlet filter, so the
-    // old FilterRegistrationBean.setEnabled(false) workaround is gone.
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
         return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
@@ -47,8 +40,6 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
-
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -58,31 +49,36 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception
-                        // Fires when there's no valid authentication at all.
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
                             response.setContentType("application/json");
-                            response.getWriter().write(mapper.writeValueAsString(
-                                    Map.of("error", "Unauthorized",
-                                            "message", authException.getMessage(),
-                                            "path", request.getRequestURI())
-                            ));
+                            response.getWriter().write(toJson("Unauthorized", authException.getMessage(), request.getRequestURI()));
                         })
-                        // Fires when authenticated but lacking permission.
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(403);
                             response.setContentType("application/json");
-                            response.getWriter().write(mapper.writeValueAsString(
-                                    Map.of("error", "Forbidden",
-                                            "message", accessDeniedException.getMessage(),
-                                            "path", request.getRequestURI())
-                            ));
+                            response.getWriter().write(toJson("Forbidden", accessDeniedException.getMessage(), request.getRequestURI()));
                         })
                 );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private static String toJson(String error, String message, String path) {
+        return "{"
+                + "\"error\":\"" + escape(error) + "\","
+                + "\"message\":\"" + escape(message) + "\","
+                + "\"path\":\"" + escape(path) + "\""
+                + "}";
+    }
+
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     @Bean
