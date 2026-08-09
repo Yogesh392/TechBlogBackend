@@ -79,6 +79,10 @@ public class AuthController {
 
         return ResponseEntity.ok(Map.of("message", "User registered successfully!"));
     }
+    @GetMapping("/test")
+    public ResponseEntity<?> test() {
+        return ResponseEntity.ok("Auth test works!");
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(/* @Valid */ @RequestBody LoginRequest request) {
