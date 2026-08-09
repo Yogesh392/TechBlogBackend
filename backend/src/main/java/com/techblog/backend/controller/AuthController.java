@@ -9,7 +9,7 @@ import com.techblog.backend.repository.UserProfileRepository;
 import com.techblog.backend.repository.UserRepository;
 import com.techblog.backend.security.JwtUtil;
 import com.techblog.backend.service.EmailService;
-// import jakarta.validation.Valid;  // Temporarily commented out
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -33,7 +33,7 @@ public class AuthController {
     private final EmailService emailService;
 
     @PostMapping("/signup")
-    public ResponseEntity<?> registerUser(/* @Valid */ @RequestBody SignUpRequest request) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest request) {
         // Check if username exists
         if (userRepository.existsByUsername(request.getUsername())) {
             return ResponseEntity.badRequest()
@@ -79,13 +79,14 @@ public class AuthController {
 
         return ResponseEntity.ok(Map.of("message", "User registered successfully!"));
     }
+
     @GetMapping("/test")
     public ResponseEntity<?> test() {
         return ResponseEntity.ok("Auth test works!");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(/* @Valid */ @RequestBody LoginRequest request) {
+    public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest request) {
         String identifier = request.getUsername();
         if (identifier.contains("@")) {
             User user = userRepository.findByEmail(identifier).orElse(null);
